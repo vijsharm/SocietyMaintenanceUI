@@ -86,8 +86,10 @@ export function DuesManagement() {
         })
         .filter(Boolean) as typeof pendingDues;
     } else {
-      // Show all pending dues
-      return pendingDues;
+      // Show all members who have at least one maintenance due month
+      return pendingDues.filter(
+        (member) => member.pendingMonths && member.pendingMonths.length > 0
+      );
     }
   };
 
