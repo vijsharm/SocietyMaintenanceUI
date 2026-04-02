@@ -6,12 +6,13 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/app/components/ui/dialog";
-import { ArrowLeft, AlertTriangle, Download, Calendar, IndianRupee, Zap, Check } from "lucide-react";
-import { getPendingDuesAPI, getMembersAPI, createPaymentAPI } from "@/app/services/api";
+import { ArrowLeft, AlertTriangle, Download, Calendar, IndianRupee, Zap, Check, Users } from "lucide-react";
+import { getPendingDuesAPI, getMembersAPI, createPaymentAPI, createBulkPaymentAPI } from "@/app/services/api";
 import { toast } from "sonner";
 import { Badge } from "@/app/components/ui/badge";
 import { MonthYearPicker } from "@/app/components/ui/month-year-picker";
 import { Member } from "@/app/types";
+import { Checkbox } from "@/app/components/ui/checkbox";
 
 type ViewType = "all" | "month" | "electricity";
 
@@ -122,7 +123,10 @@ export function DuesManagement() {
             <AlertTriangle className="h-8 w-8 text-orange-600" />
             <h1 className="text-2xl md:text-3xl mb-0 text-slate-800 font-bold">Pending Dues</h1>
           </div>
-          <p className="text-slate-600">Track and manage outstanding maintenance payments</p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <p className="text-slate-600">Track and manage outstanding maintenance payments</p>
+            <BulkPaymentDialog members={members} onSuccess={() => window.location.reload()} />
+          </div>
         </div>
 
         {/* Filter Options */}
@@ -608,6 +612,277 @@ function RecordElectricityPaymentDialog({
               disabled={isLoading}
             >
               {isLoading ? "Recording..." : "Record Payment"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Bulk Payment Dialog
+function BulkPaymentDialog({
+  members,
+  onSuccess
+}: {
+  members: Member[];
+  onSuccess: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
+  const [formData, setFormData] = useState({
+    month: new Date().toISOString().slice(0, 7),
+    paymentDate: new Date().toISOString().slice(0, 10),
+    paymentMode: "",
+    transactionId: "",
+    paymentType: "maintenance" as 'maintenance' | 'electricity',
+  });
+
+  const filteredMembers = members.filter(member =>
+    member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    member.flatNumber.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const toggleMember = (memberId: string) => {
+    const newSelected = new Set(selectedMembers);
+    if (newSelected.has(memberId)) {
+      newSelected.delete(memberId);
+    } else {
+      newSelected.add(memberId);
+    }
+    setSelectedMembers(newSelected);
+  };
+
+  const selectAll = () => {
+    setSelectedMembers(new Set(filteredMembers.map(m => m.id)));
+  };
+
+  const clearAll = () => {
+    setSelectedMembers(new Set());
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (selectedMembers.size === 0) {
+      toast.error("Please select at least one member");
+      return;
+    }
+
+    if (!formData.paymentMode) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+
+    if (formData.paymentType === 'maintenance' && !formData.month) {
+      toast.error("Please select a month for maintenance payment");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      // Create payment array for bulk API
+      const payments = Array.from(selectedMembers).map(memberId => {
+        const member = members.find(m => m.id === memberId);
+        return {
+          memberId,
+          amount: formData.paymentType === 'maintenance'
+            ? (member?.monthlyAmount || 0)
+            : (member?.electricityArrear || 0),
+          month: formData.paymentType === 'maintenance' ? formData.month : undefined,
+          paymentDate: formData.paymentDate,
+          paymentMode: formData.paymentMode,
+          transactionId: formData.transactionId || undefined,
+          paymentType: formData.paymentType,
+        };
+      });
+
+      // ApiCall: POST /api/payments/bulk
+      await createBulkPaymentAPI(payments);
+
+      toast.success(`Payment recorded for ${selectedMembers.size} members successfully`);
+      setIsOpen(false);
+      setSelectedMembers(new Set());
+      onSuccess();
+    } catch (error) {
+      console.error('Failed to record bulk payment:', error);
+      toast.error("Failed to record bulk payment");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatMonth = (monthStr: string) => {
+    const [year, month] = monthStr.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  };
+
+  const selectedMembersList = members.filter(m => selectedMembers.has(m.id));
+  const totalAmount = selectedMembersList.reduce((sum, m) =>
+    sum + (formData.paymentType === 'maintenance' ? m.monthlyAmount : (m.electricityArrear || 0)),
+    0
+  );
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg">
+          <Users className="h-4 w-4 mr-2" />
+          Record Bulk Payment
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Record Bulk Payment</DialogTitle>
+          <DialogDescription>Select multiple members and record payment for all at once</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Payment Type Selection */}
+          <div className="space-y-2">
+            <Label>Payment Type *</Label>
+            <Select
+              value={formData.paymentType}
+              onValueChange={(value: 'maintenance' | 'electricity') => setFormData({ ...formData, paymentType: value })}
+            >
+              <SelectTrigger className="border-emerald-200">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="maintenance">Maintenance</SelectItem>
+                <SelectItem value="electricity">Electricity Arrear</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {formData.paymentType === 'maintenance' && (
+            <div className="space-y-2">
+              <Label htmlFor="month">Month *</Label>
+              <MonthYearPicker
+                value={formData.month}
+                onChange={(value) => setFormData({ ...formData, month: value })}
+              />
+              <p className="text-xs text-slate-500">
+                Recording for {formatMonth(formData.month)}
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="paymentDate">Payment Date *</Label>
+            <Input
+              id="paymentDate"
+              type="date"
+              value={formData.paymentDate}
+              onChange={(e) => setFormData({ ...formData, paymentDate: e.target.value })}
+              required
+              className="border-emerald-200"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="paymentMode">Payment Mode *</Label>
+            <Select
+              value={formData.paymentMode}
+              onValueChange={(value) => setFormData({ ...formData, paymentMode: value })}
+            >
+              <SelectTrigger className="border-emerald-200">
+                <SelectValue placeholder="Select payment mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Cash">Cash</SelectItem>
+                <SelectItem value="UPI">UPI</SelectItem>
+                <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                <SelectItem value="Cheque">Cheque</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="transactionId">Transaction ID</Label>
+            <Input
+              id="transactionId"
+              placeholder="Optional"
+              value={formData.transactionId}
+              onChange={(e) => setFormData({ ...formData, transactionId: e.target.value })}
+              className="border-emerald-200"
+            />
+          </div>
+
+          {/* Member Selection */}
+          <div className="space-y-2 border-t pt-4">
+            <div className="flex items-center justify-between">
+              <Label>Select Members *</Label>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={selectAll}>
+                  Select All
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={clearAll}>
+                  Clear All
+                </Button>
+              </div>
+            </div>
+
+            <Input
+              placeholder="Search by name or flat number..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="border-emerald-200"
+            />
+
+            <div className="border border-emerald-200 rounded-lg p-3 max-h-64 overflow-y-auto space-y-2">
+              {filteredMembers.length > 0 ? (
+                filteredMembers.map((member) => (
+                  <div key={member.id} className="flex items-center gap-3 p-2 hover:bg-emerald-50 rounded">
+                    <Checkbox
+                      checked={selectedMembers.has(member.id)}
+                      onCheckedChange={() => toggleMember(member.id)}
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm text-slate-800">{member.name}</p>
+                      <p className="text-xs text-slate-500">
+                        {member.flatNumber} • ₹{formData.paymentType === 'maintenance'
+                          ? member.monthlyAmount.toLocaleString()
+                          : (member.electricityArrear || 0).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500 text-center py-4">No members found</p>
+              )}
+            </div>
+
+            {selectedMembers.size > 0 && (
+              <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                <p className="text-sm text-emerald-900">
+                  <strong>Selected:</strong> {selectedMembers.size} members
+                </p>
+                <p className="text-sm text-emerald-900">
+                  <strong>Total Amount:</strong> ₹{totalAmount.toLocaleString()}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <Button
+              type="submit"
+              className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600"
+              disabled={isLoading}
+            >
+              {isLoading ? "Recording..." : `Record Payment (${selectedMembers.size} members)`}
             </Button>
             <Button
               type="button"

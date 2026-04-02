@@ -4,11 +4,14 @@ import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
-import { ArrowLeft, Search, FileText, UserPlus } from "lucide-react";
-import { getMembersAPI, getPaymentsAPI } from "@/app/services/api";
+import { ArrowLeft, Search, FileText, UserPlus, Edit, Trash2 } from "lucide-react";
+import { getMembersAPI, getPaymentsAPI, updateMemberAPI, deleteMemberAPI } from "@/app/services/api";
 import { Member, Payment } from "@/app/types";
 import { toast } from "sonner";
 import { getCurrentMonth } from "@/app/utils/dues-calculator";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Label } from "@/app/components/ui/label";
+import { useAuth } from "@/app/context/auth-context";
 
 export function MemberList() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -16,6 +19,7 @@ export function MemberList() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const currentMonth = getCurrentMonth();
+  const { isAdmin } = useAuth();
 
   useEffect(() => {
     const loadData = async () => {
@@ -38,6 +42,31 @@ export function MemberList() {
 
     loadData();
   }, []);
+
+  const handleDeleteMember = async (memberId: string) => {
+    if (!isAdmin()) {
+      toast.error('Only admins can delete members');
+      return;
+    }
+
+    const confirmDelete = window.confirm('Are you sure you want to delete this member? This action cannot be undone.');
+    if (!confirmDelete) {
+      return;
+    }
+
+    try {
+      // ApiCall: DELETE /api/members/:id
+      await deleteMemberAPI(memberId);
+      toast.success('Member deleted successfully');
+
+      // Refresh the member list
+      const membersData = await getMembersAPI();
+      setMembers(membersData);
+    } catch (error) {
+      console.error('Failed to delete member:', error);
+      toast.error('Failed to delete member');
+    }
+  };
 
   const filteredMembers = members.filter(member =>
     member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -138,6 +167,25 @@ export function MemberList() {
                             Statement
                           </Button>
                         </Link>
+                        {isAdmin() && (
+                          <>
+                            <Link to={`/edit-member/${member.id}`}>
+                              <Button size="sm" variant="outline" className="border-emerald-200 hover:bg-emerald-50">
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                              </Button>
+                            </Link>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-red-200 hover:bg-red-50 text-red-600 hover:text-red-700"
+                              onClick={() => handleDeleteMember(member.id)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </CardContent>

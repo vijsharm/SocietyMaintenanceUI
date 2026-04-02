@@ -4,6 +4,7 @@ import { AddPayment } from "@/app/components/add-payment";
 import { MemberStatement } from "@/app/components/member-statement";
 import { Dashboard } from "@/app/components/dashboard";
 import { AddMember } from "@/app/components/add-member";
+import { EditMember } from "@/app/components/edit-member";
 import { Reports } from "@/app/components/reports";
 import { Login } from "@/app/components/login";
 import { DuesManagement } from "@/app/components/dues-management";
@@ -29,6 +30,10 @@ export const router = createBrowserRouter([
   {
     path: "/add-member",
     element: <ProtectedRoute adminOnly><AddMember /></ProtectedRoute>,
+  },
+  {
+    path: "/edit-member/:memberId",
+    element: <ProtectedRoute adminOnly><EditMember /></ProtectedRoute>,
   },
   {
     path: "/add-payment",

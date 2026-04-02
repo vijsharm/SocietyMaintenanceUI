@@ -215,6 +215,36 @@ export async function deletePaymentAPI(id: string): Promise<void> {
   });
 }
 
+// ApiCall: POST /api/payments/bulk
+// Record payments for multiple members at once
+export async function createBulkPaymentAPI(payments: Array<{
+  memberId: string;
+  amount: number;
+  month?: string;
+  paymentDate: string;
+  paymentMode: string;
+  transactionId?: string;
+  paymentType: 'maintenance' | 'electricity';
+}>): Promise<{
+  success: boolean;
+  count: number;
+  payments: Array<{
+    id: string;
+    memberId: string;
+    amount: number;
+    month?: string;
+    paymentDate: string;
+    paymentMode: string;
+    transactionId?: string;
+    paymentType: 'maintenance' | 'electricity';
+  }>;
+}> {
+  return fetchWithAuth('/api/payments/bulk', {
+    method: 'POST',
+    body: JSON.stringify({ payments }),
+  });
+}
+
 // ==================== EXPENDITURE APIs ====================
 
 // ApiCall: GET /api/expenditures
