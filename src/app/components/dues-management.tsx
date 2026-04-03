@@ -761,7 +761,6 @@ function BulkPaymentDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="maintenance">Maintenance</SelectItem>
-                <SelectItem value="electricity">Electricity Arrear</SelectItem>
               </SelectContent>
             </Select>
           </div>
