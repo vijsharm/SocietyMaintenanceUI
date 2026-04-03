@@ -67,7 +67,7 @@ export function AddPayment() {
         paymentDate: formData.paymentDate,
         paymentMode: formData.paymentMode,
         transactionId: formData.transactionId || undefined,
-        paymentType: formData.paymentType,
+        //paymentType: formData.paymentType,
       });
 
       toast.success("Payment recorded successfully");
@@ -128,7 +128,6 @@ export function AddPayment() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="maintenance">Maintenance</SelectItem>
-                    <SelectItem value="electricity">Electricity</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
